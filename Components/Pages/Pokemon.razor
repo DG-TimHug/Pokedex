@@ -1,0 +1,124 @@
+@page "/pokedex/{Id:int}"
+@inject PokedexData Db
+@inject TypedexData Dbtypedex
+
+@using System.Data
+@using PokeDex.DataAccessLibrary
+
+@if (pokedex.Rows.Count == 0)
+{
+    <p>Pokemon not found.</p>
+}
+else
+{
+    DataRow pokemon = pokedex.Rows[0];
+
+    <h3>PokeDex > @pokemon["Name"]</h3>
+
+    <table>
+        <tr>
+            <th>Nummer</th>
+            <td>@Id</td>
+        </tr>
+
+        <tr>
+            <th>Name</th>
+            <td>@pokemon["Name"]</td>
+        </tr>
+
+        <tr>
+            <th>Typ</th>
+            <td>
+                @if (typedex.Rows.Count == 0)
+                {
+                    <span>-</span>
+                }
+                else
+                {
+                    @foreach (DataRow typeRow in typedex.Rows)
+                    {
+                        string? abbreviation = typeRow["Abbreviation"].ToString();
+                        string? slug = typeRow["Slug"].ToString();
+
+                        <a href="/typedex/@slug" class="type-label type-@slug">@abbreviation</a>
+                        <span> </span>
+                    }
+                }
+            </td>
+        </tr>
+
+        <tr>
+            <th>Bild</th>
+            <td><img src="@pokemon["ImagePath"]" style="width:256px;"></td>
+        </tr>
+
+        <tr>
+            <th>Entwickelt von</th>
+            <td>
+                @{
+                    bool hasFromPokemon = false;
+
+                    foreach (DataRow evo in pokemonEvo.Rows)
+                    {
+                        int fromId = Convert.ToInt32(evo["FromPokemonId"]);
+                        int toId = Convert.ToInt32(evo["ToPokemonId"]);
+
+                        if (toId == Id)
+                        {
+                            hasFromPokemon = true;
+                            <a href="/pokedex/@fromId">@evo["PokemonFromName"]</a><br />
+                        }
+                    }
+
+                    if (!hasFromPokemon)
+                    {
+                        <span>-</span>
+                    }
+                }
+            </td>
+        </tr>
+
+        <tr>
+            <th>Entwickelt zu</th>
+            <td>
+                @{
+                    bool hasToPokemon = false;
+
+                    foreach (DataRow evo in pokemonEvo.Rows)
+                    {
+                        int fromId = Convert.ToInt32(evo["FromPokemonId"]);
+                        int toId = Convert.ToInt32(evo["ToPokemonId"]);
+
+                        if (fromId == Id)
+                        {
+                            hasToPokemon = true;
+                            <a href="/pokedex/@toId">@evo["PokemonToName"]</a><br />
+                        }
+                    }
+
+                    if (!hasToPokemon)
+                    {
+                        <span>-</span>
+                    }
+                }
+            </td>
+        </tr>
+    </table>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    DataTable pokedex = new();
+    DataTable pokemonEvo = new();
+    DataTable typedex = new();
+
+    protected override Task OnInitializedAsync()
+    {
+        pokedex = Db.GetCertainPokemon(Id);
+        pokemonEvo = Db.GetPokemonEvo(Id);
+        typedex = Dbtypedex.GetPokemonType(Id);
+
+        return Task.CompletedTask;
+    }
+}

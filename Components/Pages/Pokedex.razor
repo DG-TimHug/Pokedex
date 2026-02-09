@@ -1,0 +1,288 @@
+@page "/"
+@page "/pokedex"
+
+@rendermode InteractiveServer
+
+@using System.Data
+@using PokeDex.DataAccessLibrary
+
+@inject PokedexData Db
+@inject TypedexData DbTypeDex
+@inject ILogger<Pokedex> Logger
+
+<h3>PokeDex</h3>
+
+<div class="search-box">
+    <form method="post" @onsubmit="SearchSubmit" @formname="pokedex-search-form">
+        <AntiforgeryToken />
+        <div>
+            <InputText @bind-Value="Model!.Query" class="form-control input-search" placeholder="Search for Pokemon..." />
+            <button type="submit" class="form-control submit-search btn btn-primary">Search</button>
+            <button @onclick="OpenCreateModal" type="button" class="form-control submit-search btn btn-success">+ Create</button>
+        </div>
+    </form>
+</div>
+
+<div class="clearfix"></div>
+
+<div class="container-fluid">
+    <div class="d-flex flex-row">
+        <table class="table table-striped table-light">
+            <thead>
+                <tr>
+                    <th>Id</th>
+                    <th>Icon</th>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (DataRow row in pokedex.Rows)
+                {
+                    typedex = DbTypeDex.GetPokemonType((int)row["Id"]);
+                    var id = row.Field<int>("Id");
+
+                    <tr>
+                        <td>@row["Id"].ToString()?.PadLeft(3, '0')</td>
+                        <td><img src="@row["ImagePath"]" alt="@row["Name"]" style="width:16px;"></td>
+                        <td><a href="/pokedex/@row["Id"]/">@row["Name"]</a></td>
+                        <td>
+                            @foreach (DataRow typeRow in typedex.Rows)
+                            {
+                                string slug = typeRow["Slug"].ToString()!;
+                                string abbreviation = typeRow["Abbreviation"].ToString()!;
+
+                                <a href="/typedex/@slug/" class="type-label type-@slug">@abbreviation</a>
+                            }
+                        </td>
+                        <td>
+                            <button @onclick="@(() => OpenEditModal(id))" type="button" class="btn btn-sm btn-primary" title="Edit">✏️</button>
+                            <button @onclick="@(() => DeletePokemon(id))" type="button" class="btn btn-sm btn-danger" title="Delete">🗑️</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@if (showCreateModal)
+{
+    <div class="modal-backdrop fade show"></div>
+    <div class="modal fade show d-block" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(isEditMode ? "Edit" : "Create") Pokémon</h5>
+                    <button type="button" class="btn-close" @onclick="CloseCreateModal"></button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Id</label>
+                        <InputNumber class="form-control" @bind-Value="newId" disabled="@isEditMode" />
+                    </div>
+
+                    @if (!isEditMode)
+                    {
+                        <div class="mb-3">
+                            <label class="form-label">Previous Pokemon (Optional)</label>
+                            <InputNumber class="form-control" @bind-Value="previousPokemonId" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Next Pokemon (Optional)</label>
+                            <InputNumber class="form-control" @bind-Value="nextPokemonId" />
+                        </div>
+                    }
+
+                    <div class="mb-3">
+                        <label class="form-label">Name</label>
+                        <InputText class="form-control" @bind-Value="newName" placeholder="Enter Pokemon name" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Image Path</label>
+                        <InputText class="form-control" @bind-Value="newImagePath" placeholder="e.g., icons/001-bulbasaur.svg" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Evolution Condition</label>
+                        <InputText class="form-control" @bind-Value="newEvoCond" placeholder="e.g., Level 16" />
+                    </div>
+
+                    <hr />
+
+                    <h6>Types</h6>
+                    <div class="row">
+                        @foreach (DataRow row in allTypes.Rows)
+                        {
+                            string slug = row["Slug"].ToString()!;
+                            string name = row["Name"].ToString()!;
+
+                            <div class="col-6 col-md-4 mb-2">
+                                <div class="form-check">
+                                    <input class="form-check-input"
+                                           type="checkbox"
+                                           id="type-@slug"
+                                           checked="@selectedTypeSlugs.Contains(slug)"
+                                           @onclick="@(() => ToggleType(slug))" />
+                                    <label class="form-check-label" for="type-@slug">
+                                        @name
+                                    </label>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseCreateModal">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick="SavePokemon">
+                        @(isEditMode ? "Update" : "Create")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    DataTable pokedex = new();
+    DataTable typedex = new();
+    DataTable allTypes = new();
+
+    bool showCreateModal;
+    bool isEditMode;
+    int editingId;
+
+    int newId;
+    int previousPokemonId;
+    int nextPokemonId;
+    string newName = "";
+    string newImagePath = "";
+    string? newEvoCond = "";
+    readonly HashSet<string> selectedTypeSlugs = new();
+
+    [SupplyParameterFromForm]
+    private Search? Model { get; set; }
+
+    public class Search
+    {
+        public string? Query { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        Model ??= new();
+        allTypes = DbTypeDex.GetAllTypes();
+        RefreshPokedex();
+    }
+
+    private void RefreshPokedex()
+    {
+        pokedex = string.IsNullOrWhiteSpace(Model?.Query)
+            ? Db.GetAllPokemon()
+            : Db.GetPokemonByNameOrNumber(Model.Query);
+    }
+
+    private void SearchSubmit()
+    {
+        Logger.LogInformation("Search query: {search}", Model?.Query);
+        RefreshPokedex();
+    }
+
+    void OpenCreateModal()
+    {
+        isEditMode = false;
+        showCreateModal = true;
+    }
+
+    void OpenEditModal(int id)
+    {
+        isEditMode = true;
+        editingId = id;
+
+        DataTable pokemonData = Db.GetCertainPokemon(id);
+        if (pokemonData.Rows.Count > 0)
+        {
+            DataRow pokemon = pokemonData.Rows[0];
+            newId = (int)pokemon["Id"];
+            newName = pokemon["Name"].ToString()!;
+            newImagePath = pokemon["ImagePath"].ToString()!;
+            newEvoCond = pokemon["EvoCond"].ToString();
+        }
+
+        selectedTypeSlugs.Clear();
+        var types = DbTypeDex.GetPokemonType(id);
+        foreach (DataRow row in types.Rows)
+        {
+            selectedTypeSlugs.Add(row["Slug"].ToString()!);
+        }
+
+        showCreateModal = true;
+    }
+
+    void CloseCreateModal()
+    {
+        showCreateModal = false;
+        isEditMode = false;
+        editingId = 0;
+        ResetForm();
+    }
+
+    void ResetForm()
+    {
+        newId = 0;
+        previousPokemonId = 0;
+        nextPokemonId = 0;
+        newName = "";
+        newImagePath = "";
+        newEvoCond = "";
+        selectedTypeSlugs.Clear();
+    }
+
+    void ToggleType(string slug)
+    {
+        if (!selectedTypeSlugs.Add(slug))
+            selectedTypeSlugs.Remove(slug);
+    }
+
+    void SavePokemon()
+    {
+        if (isEditMode)
+        {
+            Db.UpdatePokemon(editingId, newName, newImagePath, newEvoCond);
+            Db.DeletePokemonTypes(editingId);
+            
+            foreach (var slug in selectedTypeSlugs)
+            {
+                Db.AddPokemonType(editingId, slug);
+            }
+        }
+        else
+        {
+            Db.CreatePokemon(newId, newName, newImagePath, newEvoCond);
+
+            if (previousPokemonId != 0)
+                Db.AddPokemonEvolution(previousPokemonId, newId);
+
+            if (nextPokemonId != 0)
+                Db.AddPokemonEvolution(newId, nextPokemonId);
+
+            foreach (var slug in selectedTypeSlugs)
+            {
+                Db.AddPokemonType(newId, slug);
+            }
+        }
+
+        RefreshPokedex();
+        CloseCreateModal();
+    }
+
+    void DeletePokemon(int id)
+    {
+        Db.DeletePokemon(id);
+        RefreshPokedex();
+    }
+}

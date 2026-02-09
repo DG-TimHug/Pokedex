@@ -1,0 +1,50 @@
+@page "/typedex/{slug}"
+@using System.Data
+@using PokeDex.DataAccessLibrary
+@inject TypedexData Dbtypedex
+
+<h3>Pokémon mit Typ: @TypeName</h3>
+
+@if (pokemonList.Rows.Count == 0)
+{
+    <p>Keine Pokémon gefunden.</p>
+}
+else
+{
+    <table class="table">
+        <tr>
+            <th>#</th>
+            <th>Name</th>
+            <th>Bild</th>
+        </tr>
+
+        @foreach (DataRow row in pokemonList.Rows)
+        {
+            <tr>
+                <td>@row["Id"]</td>
+                <td>
+                    <a href="/pokedex/@row["Id"]">
+                        @row["Name"]
+                    </a>
+                </td>
+                <td>
+                    <img src="@row["ImagePath"]" width="50" />
+                </td>
+            </tr>
+        }
+    </table>
+}
+
+@code {
+    [Parameter] public string? Slug { get; set; }
+    DataTable? pokemonList;
+    
+    DataTable typedex = new();
+    string? TypeName;
+    
+    protected override void OnInitialized()
+    {
+        pokemonList = Dbtypedex.GetPokemonByType(Slug);
+        TypeName = Dbtypedex.GetTypeNameBySlug(Slug!);
+    }
+}
