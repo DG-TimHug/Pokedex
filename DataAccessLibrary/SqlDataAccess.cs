@@ -9,7 +9,7 @@ public class SqlDataAccess
     
     public SqlDataAccess()
     {
-        mySqlConnectionString = "Server=localhost; Database=pokedex; Uid=root; Pwd=root;";
+        mySqlConnectionString = "Server=localhost; Database=pokedex; Uid=pokedex; Pwd=CrazyPokeDexPW;";
     }
 
     public DataTable Query(string query, Dictionary<string, object>? parameters = null)
