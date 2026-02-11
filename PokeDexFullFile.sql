@@ -21,7 +21,6 @@ CREATE TABLE Pokemon (
         PRIMARY KEY (Id)
 );
 
-SELECT Id as Id, Name as Name, EvoCond as EvolutionCondition from Pokemon Order by Id Desc;
 
 CREATE TABLE PokemonEvolution (
     FromPokemonId INT NOT NULL,
@@ -210,7 +209,7 @@ INSERT INTO PokemonEvolution (FromPokemonId, ToPokemonId) VALUES
 
 
 
-INSERT INTO pokemontype (PokemonId, TypeSlug) VALUES
+INSERT INTO PokemonType (PokemonId, TypeSlug) VALUES
 (1,"pflanze"),
 (1,"gift"),
 (2,"pflanze"),
@@ -322,16 +321,3 @@ INSERT INTO pokemontype (PokemonId, TypeSlug) VALUES
 
 -- Diglett
 (50, 'boden');
-
-
-
-SELECT 
-	FromPokemonId,
-    ToPokemonId,
-    pf.Name as PokemonFromName,
-    pt.Name as PokemonToName
-FROM pokedex.PokemonEvolution pe
-JOIN pokemon pf on pe.FromPokemonId = pf.Id
-JOIN pokemon pt on pe.ToPokemonId = pt.Id;
-
-SELECT * From pokemon;
